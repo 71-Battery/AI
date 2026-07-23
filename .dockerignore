@@ -1,0 +1,22 @@
+# 보안 키 / 자격증명
+*.pem
+*.key
+.env
+.env.*
+
+# 로컬 가상환경 / 캐시
+venv/
+__pycache__/
+*.pyc
+
+# 로컬 생성물 (컨테이너 내부에서 빌드/마운트)
+faiss_index/
+downloaded_context.txt
+
+# 배포/문서 부산물
+_deploy_*.py
+_verify_*.py
+*.service
+gsm-nginx.conf
+.git/
+.gitignore

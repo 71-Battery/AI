@@ -1,0 +1,15 @@
+services:
+  campus-ai:
+    build: .
+    image: campus-ai:latest
+    container_name: campus-ai
+    restart: unless-stopped
+    # 호스트 8502 -> 컨테이너 8501 (기존 systemd streamlit이 쓰는 8501과 충돌 방지)
+    ports:
+      - "8502:8501"
+    environment:
+      - AWS_DEFAULT_REGION=us-east-1
+    volumes:
+      # 지식베이스와 벡터 인덱스를 호스트와 공유하여 재빌드/갱신 시 유지
+      - ./knowledge_base:/app/knowledge_base
+      - ./faiss_index:/app/faiss_index

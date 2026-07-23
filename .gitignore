@@ -1,0 +1,19 @@
+# 보안 키 / 자격증명 (절대 커밋 금지)
+*.pem
+*.key
+.env
+.env.*
+!.env.example
+
+# 로컬 벡터 DB / 다운로드 데이터
+faiss_index/
+downloaded_context.txt
+
+# Python
+venv/
+__pycache__/
+*.pyc
+
+# 배포용 임시 검증 스크립트
+_deploy_verify.py
+_deploy_rag_test.py

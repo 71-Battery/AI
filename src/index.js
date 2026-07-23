@@ -1,11 +1,18 @@
 import express from 'express';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { config } from './config.js';
 import { store } from './store.js';
 import { ingestNotice } from './pipeline.js';
 import { startPoller } from './poller.js';
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
 const app = express();
 app.use(express.json({ limit: '1mb' }));
+
+// 데모용 웹 UI (public/index.html)
+app.use(express.static(path.join(__dirname, '..', 'public')));
 
 // 헬스체크
 app.get('/health', (_req, res) => res.json({ ok: true }));

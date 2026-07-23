@@ -1,0 +1,33 @@
+# 능동형 공지·일정 알림 서비스 (Node.js) 컨테이너 이미지
+# 팀의 Python 챗봇용 Dockerfile과 분리하기 위해 파일명을 Dockerfile.notice 로 둠.
+#   빌드:  docker build -f Dockerfile.notice -t notice-service .
+FROM node:20-alpine
+
+ENV NODE_ENV=production \
+    PORT=3000 \
+    AI_PROVIDER=bedrock \
+    BEDROCK_REGION=eu-central-1 \
+    BEDROCK_MODEL_ID=eu.anthropic.claude-sonnet-4-5-20250929-v1:0 \
+    NOTIFY_CHANNELS=console \
+    POLL_ENABLED=false
+
+WORKDIR /app
+
+# 1. 의존성 먼저 설치 (레이어 캐시 활용)
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev --no-audit --no-fund
+
+# 2. 애플리케이션 소스만 명시적으로 복사 (node_modules/.git 등 제외)
+COPY src ./src
+COPY public ./public
+COPY scripts ./scripts
+
+# 3. 웹 포트
+EXPOSE 3000
+
+# 4. 헬스체크 (alpine 기본 wget 사용)
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD wget -qO- http://127.0.0.1:3000/health || exit 1
+
+# 5. 실행
+CMD ["node", "src/index.js"]

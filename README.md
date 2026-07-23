@@ -1,125 +1,196 @@
-# 🎓 교내 공지·학사정보 통합 AI 도우미
+# 🎓 교내 공지·학사정보 통합 AI 도우미 — AI 엔진
 
-학교의 핵심 정보(**학사규정 · 기업 협력사 · 실무프로젝트 목록 · 교육과정**)를 하나의 지식베이스로 통합하고, 학생의 자연어 질문에 RAG(Retrieval-Augmented Generation) 방식으로 답변하는 AI 도우미입니다.
+학생의 학년·학과 정보를 바탕으로 학사규정, 기업 협력사, 실무프로젝트, 교육과정 문서를 검색하고 학교 특성에 맞춰 답변하는 RAG AI 엔진입니다.
 
-## 프로젝트 목적
-학생이 학교 규정과 교육과정, 현장실습·협력사·프로젝트 정보를 여러 문서에서 직접 찾지 않아도 되도록 통합 검색·맞춤 설명을 제공합니다.
+이 저장소는 학생용 UI가 아니라 **프론트/기존 백엔드가 호출하는 AI 기능과 API 연동 통로**를 제공합니다.
 
-## 3가지 중심 기능
-1. **학생 학년/학과 파악** — 사이드바에서 직접 선택하거나 질문 텍스트에서 학년·학과를 식별합니다.
-2. **관련 정보 찾기(RAG)** — 질문을 임베딩하여 FAISS 지식베이스에서 관련 문서를 의미 기반으로 검색합니다.
-3. **학교 특성 맞춤 설명** — 검색된 정보를 학생의 학년·학과와 학교 교육 특성에 맞춰 설명합니다.
-
-모든 답변에는 근거가 된 **문서명·카테고리·원본 내용 일부**가 함께 표시됩니다. 지식베이스에 없는 내용은 추측하지 않습니다.
-
-## 기술 스택
-- Python 3.12, Streamlit
-- Amazon Bedrock Claude: 답변 생성
-- Amazon Titan Embed Text v2: 문서·질문 임베딩
-- FAISS: 로컬 벡터 검색
-- LangChain: 문서 청킹 및 Bedrock/FAISS 연동
-- AWS S3: 문서 백업 저장소
-- EC2 IAM Role: AWS 키를 코드에 저장하지 않는 인증
-
-## 프로젝트 구조
+## 역할 분리
 
 ```text
-.
-├── app.py                         # Streamlit 웹 앱
-├── bedrock_faiss_indexer.py      # 카테고리별 지식베이스 인덱서
-├── bedrock_faiss_rag_chatbot.py  # CLI RAG 테스트 앱
-├── bedrock_simple_test.py        # Bedrock 연결 테스트
-├── knowledge_base/
-│   ├── academic_rules/            # 학사규정
-│   ├── partner_companies/         # 기업 협력사
-│   ├── field_projects/            # 실무프로젝트 목록
-│   └── curriculum/                # 교육과정
-├── faiss_index/                   # 생성된 FAISS 인덱스
-├── requirements.txt
-├── Dockerfile
-└── docker-compose.yml
+프론트엔드 → 기존 백엔드(인증·회원 DB) → Campus AI API → 기존 백엔드 → 프론트엔드
+                                             ├─ FAISS 검색
+                                             ├─ Titan 임베딩
+                                             └─ Bedrock Claude 답변
 ```
 
-## 실행 방법
+- 프론트엔드: 질문 입력, 답변/출처 표시
+- 기존 백엔드: JWT 검증, `user_id` 확인, 회원 DB에서 학년·학과 조회, AI API 호출
+- 이 프로젝트: RAG 검색, 프롬프트 구성, Claude 호출, 출처 생성
+- AWS 자격증명과 내부 문서는 프론트엔드에 노출하지 않음
 
-### 의존성 설치 및 인덱스 생성
+## 주요 파일
+
+- `ai_service.py`: UI 프레임워크가 없는 AI 엔진. 프로필 식별, FAISS 검색, 프롬프트, Claude, 출처 반환
+- `api_server.py`: 기존 백엔드가 호출할 FastAPI 연동 API (`POST /v1/chat`, 공지 API)
+- `notice_service.py`: 공지 중복검사·JSON 저장·Bedrock 요약·fallback 요약·console/Slack/SES 알림·외부 polling
+- `bedrock_faiss_indexer.py`: 카테고리별 문서를 청킹하고 FAISS 인덱스를 생성
+- `bedrock_faiss_rag_chatbot.py`: AI 엔진 동작을 확인하는 CLI 테스트
+- `bedrock_simple_test.py`: Bedrock 연결 테스트
+- `knowledge_base/`: 학사규정·기업 협력사·실무프로젝트·교육과정 원본 문서
+- `faiss_index/`: 생성된 로컬 벡터 인덱스
+- `ai_backend_integration_spec.md`: 백엔드 담당자에게 전달할 작업 명세서와 AI 코딩 프롬프트
+- `Dockerfile`, `docker-compose.yml`: API 컨테이너 실행 설정
+- `campus-ai-api.service`: EC2 systemd 운영 설정
+
+## AI API 계약
+
+### 요청
+
+```http
+POST /v1/chat
+Content-Type: application/json
+```
+
+```json
+{
+  "query": "현장실습은 어떻게 신청해?",
+  "grade": "3학년",
+  "department": "소프트웨어개발과",
+  "top_k": 4,
+  "score_threshold": 1.5
+}
+```
+
+`grade`와 `department`는 기존 백엔드가 JWT의 `user_id`로 회원 DB에서 조회해 전달해야 합니다. 프론트가 보낸 프로필을 그대로 신뢰하지 마세요. 값이 없으면 질문 텍스트에서 보조적으로 추론합니다.
+
+### 응답
+
+```json
+{
+  "answer": "3학년 소프트웨어개발과 학생은 3학년 2학기부터 현장실습을 신청할 수 있습니다.",
+  "profile": {
+    "grade": "3학년",
+    "department": "소프트웨어개발과"
+  },
+  "sources": [
+    {
+      "category": "기업 협력사",
+      "document": "01_기업_협력사.md",
+      "snippet": "3학년 2학기부터 현장실습 신청이 가능하다.",
+      "score": 0.42
+    }
+  ],
+  "has_context": true,
+  "retrieval": {
+    "top_k": 4,
+    "score_threshold": 1.5,
+    "matched": true
+  },
+  "request_id": "uuid"
+}
+```
+
+### 오류 응답
+
+```json
+{
+  "error": {
+    "code": "KNOWLEDGE_BASE_UNAVAILABLE",
+    "message": "사용자에게 보여줄 안전한 메시지",
+    "request_id": "uuid"
+  }
+}
+```
+
+- `400 INVALID_REQUEST`: 빈 질문 또는 잘못된 검색 옵션
+- `502 AI_PROVIDER_UNAVAILABLE`: Bedrock 호출 실패
+- `503 KNOWLEDGE_BASE_UNAVAILABLE`: FAISS 인덱스 로드 실패
+
+## 로컬 실행
 
 ```bash
 python3 -m venv venv
-source venv/bin/activate
+# Windows PowerShell: .\venv\Scripts\Activate.ps1
+# Linux/macOS: source venv/bin/activate
 pip install -r requirements.txt
+python bedrock_faiss_indexer.py
+uvicorn api_server:app --host 0.0.0.0 --port 8000
+```
+
+- API 문서: `http://localhost:8000/docs`
+- 헬스체크: `GET http://localhost:8000/health`
+- 질의 API: `POST http://localhost:8000/v1/chat`
+- 공지 등록: `POST http://localhost:8000/v1/notices`
+- 공지 목록: `GET http://localhost:8000/v1/notices`
+- 공지 source 수동 polling: `POST http://localhost:8000/v1/notices/poll`
+
+```bash
+curl -X POST http://localhost:8000/v1/chat \
+  -H "Content-Type: application/json" \
+  -d '{"query":"3학년 현장실습은 어떻게 신청해?","grade":"3학년","department":"소프트웨어개발과"}'
+```
+
+## 환경변수
+
+- `AWS_REGION` (기본 `us-east-1`)
+- `BEDROCK_MODEL_ID` (기본 `us.anthropic.claude-sonnet-5`)
+- `EMBEDDING_MODEL_ID` (기본 `amazon.titan-embed-text-v2:0`)
+- `FAISS_INDEX_PATH` (기본 `faiss_index`)
+- `API_PREFIX` (기본 `/v1`)
+- `CORS_ORIGINS` (기본 `http://localhost:3000`, 직접 브라우저 호출이 필요한 개발 환경에서만 설정)
+- `NOTICE_DATA_FILE` (기본 `data/notices.json`)
+- `NOTICE_AI_PROVIDER` (기본 `bedrock`, `fallback` 지정 시 규칙 기반 요약)
+- `NOTICE_BEDROCK_MODEL_ID` / `NOTICE_BEDROCK_REGION` (공지 요약용 Bedrock 설정)
+- `NOTICE_POLL_SOURCE_URL` (선택, JSON 배열 또는 `{ "items": [] }`를 반환하는 외부 공지 URL)
+- `NOTICE_POLL_INTERVAL_SECONDS` (기본 `300`, URL이 있을 때 백그라운드 polling 주기)
+- `NOTICE_CHANNELS` (기본 `console`, 쉼표 구분: `console`, `slack`, `email`)
+- `SLACK_WEBHOOK_URL`, `EMAIL_FROM`, `EMAIL_TO`, `SES_REGION` (해당 알림 채널 사용 시)
+
+AWS 인증은 EC2 IAM Role을 사용하며 액세스 키를 코드나 프론트엔드에 넣지 않습니다.
+
+## 공지·알림 API
+
+학사정보 질의(`/v1/chat`)와 분리된 공지 처리 흐름입니다. 공지는 등록되면 저장 → 요약 → 선제 알림 순서로 처리됩니다. 이 API는 기존 백엔드의 내부 관리자/수집 서버에서 호출하고, 인증·권한 검증은 기존 백엔드 경계에서 적용해야 합니다.
+
+### 공지 등록 요청
+
+```json
+{
+  "title": "2026학년도 현장실습 신청 안내",
+  "content": "3학년 재학생은 8월 1일까지 신청서를 제출하세요.",
+  "type": "notice",
+  "starts_at": null,
+  "url": "https://school.example/notices/123",
+  "source_id": "school-123",
+  "target_grade": "3학년",
+  "target_department": "소프트웨어개발과"
+}
+```
+
+`source_id`가 있으면 이를 우선 사용하고, 없으면 제목과 본문 SHA-256 해시로 중복을 판별합니다. 중복 등록은 HTTP 200과 `skipped: true`로 반환되며 새 알림을 보내지 않습니다.
+
+```json
+{
+  "skipped": false,
+  "notice": {
+    "id": "uuid",
+    "title": "2026학년도 현장실습 신청 안내",
+    "summary": "핵심요약: ...",
+    "summary_provider": "bedrock",
+    "notified": true
+  },
+  "notify_results": [{"channel": "console", "ok": true}]
+}
+```
+
+`NOTICE_POLL_SOURCE_URL`을 설정하면 API 프로세스가 시작된 뒤 지정 주기마다 외부 JSON 공지를 polling합니다. URL이 없으면 자동 polling은 비활성화되며, 수동 polling API는 `enabled: false`를 반환합니다. Bedrock 요약이 실패하면 공지 원문에서 추출한 fallback 요약으로 계속 처리합니다.
+
+## 인덱스 갱신
+
+```bash
 python bedrock_faiss_indexer.py
 ```
 
-### CLI 테스트
+관리자 문서 업로드/재인덱싱은 학생용 API와 분리된 기존 백엔드 관리자 기능으로 연결해야 합니다. 일반 학생 질의 API가 파일을 쓰거나 인덱스를 재생성하지 않도록 하세요.
 
-```bash
-python bedrock_faiss_rag_chatbot.py
-```
+## 운영 배포
 
-대표 질문:
-- `3학년 소프트웨어개발과 현장실습은 어떻게 신청해?`
-- `소프트웨어개발과 2학년 교육과정 알려줘`
-- `오늘 급식 메뉴가 뭐야?` → 지식베이스에 없다고 안내
+- systemd: `campus-ai-api.service`
+- 내부 API 포트: `127.0.0.1:8000`
+- Nginx: 외부 `80` → 내부 `8000`
+- 로그: `sudo journalctl -u campus-ai-api -f`
+- 재시작: `sudo systemctl restart campus-ai-api`
 
-### 웹 앱 실행
+## 백엔드 담당자용 명세서
 
-```bash
-python -m streamlit run app.py --server.address 0.0.0.0 --server.port 8501
-```
-
-## 최종 시스템 프롬프트
-
-아래 프롬프트가 `app.py`의 `build_prompt()`에서 실제로 사용됩니다. `{profile.grade}`, `{profile.department}`, `{context_text}`, `{query}`는 실행 시 실제 값으로 치환됩니다.
-
-```text
-당신은 우리 학교 학생을 돕는 교내 학사정보 안내 도우미입니다.
-아래 [참고문서]만을 근거로 학생의 질문에 정확하고 친절하게 답하세요.
-참고문서에 근거가 없는 내용은 지어내지 말고 "제공된 지식베이스에는 해당 정보가 없습니다"라고 답하세요.
-가능하면 어떤 문서를 근거로 삼았는지 자연스럽게 언급하세요.
-
-[학생 정보]
-- 학년: {profile.grade}
-- 학과: {profile.department}
-학년/학과에 해당하는 규정·교육과정·실무프로젝트·협력사 정보가 있으면 그에 맞춰 설명하세요.
-학년 또는 학과가 '미지정'이면 일반 정보로 답하되, 더 정확한 안내를 위해 학년/학과 확인을 정중히 요청하세요.
-
-[참고문서]
-{context_text}
-
-질문: {query}
-답변:
-```
-
-### 프롬프트 설계 효과
-- 학생의 학년과 학과를 답변 맥락에 포함하여 개인화합니다.
-- 검색된 문서만 근거로 사용하도록 하여 환각을 줄입니다.
-- 출처 문서명을 답변에 언급하도록 유도합니다.
-- 실제 출처 카드는 코드가 검색 청크에서 별도로 생성하여 답변과 연결합니다.
-
-## 최종 작동 시나리오 및 기대 효과
-
-1. 관리자가 학사규정, 기업 협력사, 실무프로젝트, 교육과정 문서를 카테고리별로 등록합니다.
-2. 인덱서가 문서를 500자 단위, 50자 중복으로 분할하고 `category`·`source` 메타데이터를 부여합니다.
-3. Titan Embed Text v2가 문서 청크를 벡터화하고 FAISS에 저장합니다.
-4. 학생이 사이드바에서 학년·학과를 선택하거나 질문에 직접 입력합니다.
-5. 질문이 FAISS에서 상위 4개 문서 청크로 검색됩니다.
-6. Claude가 학생 프로파일과 검색 결과를 바탕으로 학교 특성에 맞는 답변을 스트리밍합니다.
-7. 화면에는 답변과 함께 근거 문서명, 카테고리, 원문 일부가 표시됩니다.
-8. 검색 근거가 없으면 답변을 추측하지 않고 지식베이스에 정보가 없다고 안내합니다.
-
-이 흐름으로 학생의 정보 탐색 시간을 줄이고, 학년·학과별로 필요한 정보를 쉽게 이해하도록 하며, 학교에 흩어진 공지와 학사정보의 활용도를 높일 수 있습니다.
-
-## 최종 비즈니스 기대 가치
-
-교내 공지·학사정보 통합 AI 도우미는 학교 정보를 단순 저장하는 것을 넘어 학생별 상황에 맞는 실행 가능한 설명으로 변환합니다. 학생은 규정·교육과정·협력사·프로젝트 정보를 빠르게 확인하고, 교사는 반복적인 문의 응대 부담을 줄이며, 학교는 축적된 공식 문서를 지속적으로 활용할 수 있습니다. 결과적으로 학생 정보 접근성, 학교 행정 효율, 교육과정 참여도와 진로 탐색의 질을 함께 높이는 지식 서비스가 됩니다.
-
-## EC2 운영 배포
-
-- systemd 서비스: `gsm-streamlit`
-- Streamlit 내부 포트: `127.0.0.1:8501`
-- Nginx 외부 포트: `80`
-- 서비스 주소: `http://<EC2-PUBLIC-IP>`
-- 로그: `sudo journalctl -u gsm-streamlit -f`
-- 재시작: `sudo systemctl restart gsm-streamlit`
-- AWS 인증: EC2 IAM Role 사용
+`ai_backend_integration_spec.md`에 회원 DB·JWT·AI 엔진 연결 순서, 요청/응답 계약, 보안 요구사항, AI 코딩 도구에 전달할 전문 프롬프트를 작성해 두었습니다.

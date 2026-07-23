@@ -12,7 +12,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir -r requirements.txt
 
-COPY ai_service.py api_server.py bedrock_faiss_indexer.py bedrock_faiss_rag_chatbot.py bedrock_simple_test.py ./
+COPY ai_service.py api_server.py notice_service.py bedrock_faiss_indexer.py bedrock_faiss_rag_chatbot.py bedrock_simple_test.py ./
 COPY knowledge_base ./knowledge_base
 
 EXPOSE 8000

@@ -1,6 +1,8 @@
 # AI-백엔드 연동 작업 명세서
 
-이 문서는 백엔드 담당자가 회원·인증 서버와 교내 학사정보 AI 엔진을 연결하기 위한 작업 지시서입니다. AI 엔진 코드는 `ai_service.py`, 연동 API는 `api_server.py`에 구현되어 있습니다.
+이 문서는 백엔드 담당자가 회원·인증 서버와 교내 학사정보 AI 엔진을 연결하기 위한 작업 지시서입니다. 학사정보 질의 엔진은 `ai_service.py`, FastAPI 연동 API와 공지·알림 API는 `api_server.py`, 공지 처리 기능은 `notice_service.py`에 구현되어 있습니다.
+
+학사정보 챗봇과 공지·알림 챗봇은 목적이 다르므로 프롬프트와 처리 흐름을 분리합니다. 학사정보 챗봇은 고정 문서 검색과 출처 기반 정확성에 집중하고, 공지·알림 챗봇은 신규 공지의 중복 제거·요약·선제 알림에 집중합니다.
 
 ## 백엔드 담당자용 AI 작업 프롬프트
 
@@ -138,6 +140,31 @@ Swagger 문서:
 ```text
 http://localhost:8000/docs
 ```
+
+## 공지·알림 API 계약
+
+공지 수집기 또는 기존 백엔드의 관리자 기능이 다음 API를 호출합니다. 학생 프론트엔드가 공지 API와 Bedrock을 직접 호출하지 않습니다.
+
+`POST /v1/notices`
+
+```json
+{
+  "title": "2026학년도 현장실습 신청 안내",
+  "content": "3학년 재학생은 8월 1일까지 신청서를 제출하세요.",
+  "type": "notice",
+  "starts_at": null,
+  "url": "https://school.example/notices/123",
+  "source_id": "school-123",
+  "target_grade": "3학년",
+  "target_department": "소프트웨어개발과"
+}
+```
+
+등록 응답에는 `skipped`, `notice.summary`, `notice.summary_provider`, `notice.notified`, `notify_results`가 포함됩니다. `source_id`가 없으면 제목·본문 해시로 중복을 판별합니다. 중복이면 `skipped: true`이며 저장·요약·알림을 다시 실행하지 않습니다.
+
+`GET /v1/notices?limit=50`은 최신 공지 목록을 반환하고, `POST /v1/notices/poll`은 외부 JSON source를 즉시 한 번 조회합니다. 외부 source는 배열 또는 `{ "items": [] }` 형태를 반환해야 합니다. `NOTICE_POLL_SOURCE_URL`이 설정된 경우에만 프로세스 내부 백그라운드 polling이 활성화됩니다.
+
+공지 API의 기본 알림 채널은 `console`입니다. Slack은 `SLACK_WEBHOOK_URL`, SES 이메일은 `EMAIL_FROM`, `EMAIL_TO`, `SES_REGION`을 설정해야 합니다. Bedrock 요약 실패 시 규칙 기반 fallback 요약을 사용하므로 공지 저장과 알림은 계속됩니다.
 
 ## 협업 시 지켜야 할 경계
 

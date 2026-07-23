@@ -11,6 +11,9 @@ Restart=always
 RestartSec=5
 Environment=AWS_REGION=us-east-1
 Environment=FAISS_INDEX_PATH=/home/ubuntu/gsm-hackathon/faiss_index
+Environment=NOTICE_DATA_FILE=/home/ubuntu/gsm-hackathon/data/notices.json
+Environment=NOTICE_CHANNELS=console
+Environment=NOTICE_POLL_INTERVAL_SECONDS=300
 Environment=HOME=/home/ubuntu
 
 [Install]

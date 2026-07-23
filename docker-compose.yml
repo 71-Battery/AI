@@ -10,6 +10,10 @@ services:
       AWS_REGION: us-east-1
       FAISS_INDEX_PATH: /app/faiss_index
       CORS_ORIGINS: http://localhost:3000
+      NOTICE_DATA_FILE: /app/data/notices.json
+      NOTICE_CHANNELS: console
+      NOTICE_POLL_INTERVAL_SECONDS: 300
     volumes:
       - ./knowledge_base:/app/knowledge_base:ro
       - ./faiss_index:/app/faiss_index:ro
+      - ./data:/app/data

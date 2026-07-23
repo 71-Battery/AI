@@ -5,8 +5,10 @@
 .env.*
 !.env.example
 
-# 로컬 벡터 DB / 다운로드 데이터
+# 로컬 벡터 DB / 런타임 데이터
 faiss_index/
+data/*
+!data/.gitkeep
 downloaded_context.txt
 
 # Python

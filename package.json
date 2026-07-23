@@ -1,0 +1,23 @@
+{
+  "name": "proactive-notice-service",
+  "version": "1.0.0",
+  "description": "새로운 공지/일정이 등록되면 AI가 먼저 사용자에게 알림을 보내고 내용을 요약·설명해 주는 능동형 서비스",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "demo": "node scripts/demo.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@aws-sdk/client-bedrock-runtime": "^3.700.0",
+    "@aws-sdk/client-ses": "^3.700.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.1",
+    "node-cron": "^3.0.3"
+  },
+  "license": "MIT"
+}

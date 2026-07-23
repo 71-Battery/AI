@@ -17,3 +17,10 @@ __pycache__/
 # 배포용 임시 검증 스크립트
 _deploy_verify.py
 _deploy_rag_test.py
+
+# Node.js (notice service)
+node_modules/
+*.log
+data/
+.npm-cache/
+.mytmp/

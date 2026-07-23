@@ -1,0 +1,17 @@
+[Unit]
+Description=Campus Information AI Backend API
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/gsm-hackathon
+ExecStart=/home/ubuntu/gsm-hackathon/venv/bin/uvicorn api_server:app --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=5
+Environment=AWS_REGION=us-east-1
+Environment=FAISS_INDEX_PATH=/home/ubuntu/gsm-hackathon/faiss_index
+Environment=HOME=/home/ubuntu
+
+[Install]
+WantedBy=multi-user.target
